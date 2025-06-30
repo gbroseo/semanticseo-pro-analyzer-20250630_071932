@@ -1,0 +1,158 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->safeLoad();
+
+// Validate required environment variables
+$appUrl = rtrim($_ENV['APP_URL'] ?? '', '/');
+$dsn    = $_ENV['DB_DSN'] ?? '';
+$dbUser = $_ENV['DB_USER'] ?? '';
+$dbPass = $_ENV['DB_PASSWORD'] ?? '';
+
+if ($appUrl === '' || $dsn === '' || $dbUser === '' || $dbPass === '') {
+    error_log('Sitemap generation error: Missing required environment variables.');
+    http_response_code(500);
+    exit;
+}
+
+$maxUrlsPerSitemap = 50000;
+
+try {
+    $pdo = new PDO($dsn, $dbUser, $dbPass, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+
+    $entries = [];
+
+    // Static pages
+    $entries[] = ['loc' => $appUrl . '/', 'changefreq' => 'daily', 'priority' => '1.0'];
+    $entries[] = ['loc' => $appUrl . '/about', 'changefreq' => 'monthly', 'priority' => '0.5'];
+    $entries[] = ['loc' => $appUrl . '/contact', 'changefreq' => 'monthly', 'priority' => '0.5'];
+
+    // Published pages
+    $stmt = $pdo->query("SELECT slug, updated_at FROM pages WHERE status = 'published'");
+    while ($row = $stmt->fetch()) {
+        $entries[] = [
+            'loc'        => $appUrl . '/page/' . rawurlencode($row['slug']),
+            'lastmod'    => date('Y-m-d', strtotime($row['updated_at'])),
+            'changefreq' => 'monthly',
+            'priority'   => '0.6',
+        ];
+    }
+
+    // Published posts
+    $stmt = $pdo->query("SELECT slug, updated_at FROM posts WHERE status = 'published'");
+    while ($row = $stmt->fetch()) {
+        $entries[] = [
+            'loc'        => $appUrl . '/post/' . rawurlencode($row['slug']),
+            'lastmod'    => date('Y-m-d', strtotime($row['updated_at'])),
+            'changefreq' => 'weekly',
+            'priority'   => '0.8',
+        ];
+    }
+
+    // Completed analyses
+    $stmt = $pdo->query("SELECT id, updated_at FROM analyses WHERE status = 'completed'");
+    while ($row = $stmt->fetch()) {
+        $entries[] = [
+            'loc'        => $appUrl . '/analysis/' . (int)$row['id'],
+            'lastmod'    => date('Y-m-d', strtotime($row['updated_at'])),
+            'changefreq' => 'monthly',
+            'priority'   => '0.5',
+        ];
+    }
+} catch (Throwable $e) {
+    error_log('Sitemap generation error: ' . $e->getMessage());
+    http_response_code(500);
+    exit;
+}
+
+// Determine the most recent lastmod date
+$lastModDates = [];
+foreach ($entries as $e) {
+    if (!empty($e['lastmod'])) {
+        $lastModDates[] = $e['lastmod'];
+    }
+}
+$latestLastMod = !empty($lastModDates) ? max($lastModDates) : date('Y-m-d');
+
+// Send caching headers
+header('Content-Type: application/xml; charset=UTF-8');
+header('Cache-Control: public, max-age=86400');
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s', strtotime($latestLastMod)) . ' GMT');
+
+// Splitting logic for large sitemaps
+$totalEntries  = count($entries);
+$totalSitemaps = (int)ceil($totalEntries / $maxUrlsPerSitemap);
+$pageParam     = isset($_GET['page']) ? (int)$_GET['page'] : 0;
+
+// XML writer
+$xml = new XMLWriter();
+$xml->openMemory();
+$xml->setIndent(true);
+
+if ($totalSitemaps > 1 && $pageParam === 0) {
+    // Sitemap index
+    $xml->startDocument('1.0', 'UTF-8');
+    $xml->startElement('sitemapindex');
+    $xml->writeAttribute('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9');
+
+    for ($i = 1; $i <= $totalSitemaps; $i++) {
+        $xml->startElement('sitemap');
+        $xml->writeElement('loc', $appUrl . '/sitemap.xml?page=' . $i);
+
+        // Determine lastmod for this chunk
+        $chunk      = array_slice($entries, ($i - 1) * $maxUrlsPerSitemap, $maxUrlsPerSitemap);
+        $chunkDates = [];
+        foreach ($chunk as $e) {
+            if (!empty($e['lastmod'])) {
+                $chunkDates[] = $e['lastmod'];
+            }
+        }
+        $chunkLastMod = !empty($chunkDates) ? max($chunkDates) : $latestLastMod;
+        $xml->writeElement('lastmod', $chunkLastMod);
+
+        $xml->endElement(); // sitemap
+    }
+
+    $xml->endElement(); // sitemapindex
+    $xml->endDocument();
+    echo $xml->outputMemory();
+    exit;
+}
+
+// Determine entries slice
+if ($totalSitemaps > 1) {
+    $page   = max(1, $pageParam);
+    $offset = ($page - 1) * $maxUrlsPerSitemap;
+    $slice  = array_slice($entries, $offset, $maxUrlsPerSitemap);
+} else {
+    $slice = $entries;
+}
+
+// Single sitemap
+$xml->startDocument('1.0', 'UTF-8');
+$xml->startElement('urlset');
+$xml->writeAttribute('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9');
+
+foreach ($slice as $e) {
+    $xml->startElement('url');
+    $xml->writeElement('loc', $e['loc']);
+    if (!empty($e['lastmod'])) {
+        $xml->writeElement('lastmod', $e['lastmod']);
+    }
+    $xml->writeElement('changefreq', $e['changefreq']);
+    $xml->writeElement('priority', $e['priority']);
+    $xml->endElement(); // url
+}
+
+$xml->endElement(); // urlset
+$xml->endDocument();
+
+echo $xml->outputMemory();
