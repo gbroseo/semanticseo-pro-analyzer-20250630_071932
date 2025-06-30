@@ -1,0 +1,68 @@
+{
+  "name": "semanticseo-pro-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SemanticSEO Pro Analyzer: bulk semantic analysis with TextRazor API",
+  "main": "dist/bundle.js",
+  "scripts": {
+    "start": "webpack serve --config webpack.dev.js --mode development --open",
+    "build": "webpack --config webpack.prod.js --mode production",
+    "lint": "eslint \"src/**/*.{js,jsx}\"",
+    "lint:fix": "eslint \"src/**/*.{js,jsx}\" --fix",
+    "format": "prettier --write \"src/**/*.{js,css,html,json,md}\" \"**/*.php\"",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "seo",
+    "textrazor",
+    "semantic-analysis",
+    "wordpress",
+    "plugin"
+  ],
+  "author": "Your Name <youremail@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/semanticseo-pro-analyzer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/semanticseo-pro-analyzer/issues"
+  },
+  "homepage": "https://github.com/yourusername/semanticseo-pro-analyzer#readme",
+  "engines": {
+    "node": ">=16",
+    "npm": ">=6"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "chart.js": "^4.4.0",
+    "dayjs": "^1.11.7",
+    "file-saver": "^2.0.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.22.1",
+    "@babel/preset-env": "^7.22.4",
+    "@prettier/plugin-php": "^3.0.0",
+    "autoprefixer": "^10.4.14",
+    "babel-jest": "^29.6.1",
+    "babel-loader": "^9.1.2",
+    "css-loader": "^6.8.1",
+    "eslint": "^8.39.0",
+    "eslint-plugin-import": "^2.27.6",
+    "html-webpack-plugin": "^5.5.3",
+    "jest": "^29.6.1",
+    "postcss": "^8.4.27",
+    "postcss-loader": "^7.3.3",
+    "prettier": "^3.0.3",
+    "style-loader": "^3.3.3",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.0"
+  },
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not op_mini all"
+  ]
+}
